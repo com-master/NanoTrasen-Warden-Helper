@@ -60,7 +60,7 @@ const App: React.FC = () => {
         recidivism: false,
         recidivismCount: 0,
     });
-    const [timer, setTimer] = useState<Timer>({ elapsedSeconds: 0, running: false });
+    const [timer, setTimer] = useState<Timer>({ elapsedSeconds: 0, running: false, startedAt: null });
     const [startTimeInput, setStartTimeInput] = useState('');
     const [baseStartSeconds, setBaseStartSeconds] = useState(0);
     const [objectDetails, setObjectDetails] = useState<ObjectDetailsType>({
@@ -93,18 +93,19 @@ const App: React.FC = () => {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-expect-error
         let interval: NodeJS.Timeout | null = null;
-        if (timer.running) {
+        if (timer.running && timer.startedAt !== null) {
+            const startedAt = timer.startedAt;
             interval = setInterval(() => {
                 setTimer((prev) => ({
                     ...prev,
-                    elapsedSeconds: prev.elapsedSeconds + 1,
+                    elapsedSeconds: Math.floor((Date.now() - startedAt) / 1000),
                 }));
             }, 1000);
         }
         return () => {
             if (interval) clearInterval(interval);
         };
-    }, [timer.running]);
+    }, [timer.running, timer.startedAt]);
 
     const toggleOffense = (code: string) => {
         setSelectedOffenses((prev) => {
@@ -449,17 +450,25 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
             offenseDetails.push(`Рецидив (+${recidivismMinutes} минут за ${globalModifiers.recidivismCount} случаев)`);
         }
 
+        // Apply 30-minute cap: excess goes to debt counter, perm at 70+ minutes
+        let cappedMinutes = totalMinutes;
+        if (!isLifeSentence && !isDeathPenalty && totalMinutes > 30 && totalMinutes < 70) {
+            cappedMinutes = 30;
+            const excess = totalMinutes - 30;
+            offenseDetails.push(`Превышение лимита 30 мин.: ${excess} мин. сверх нормы идут в зачёт долга`);
+        }
+
         let finalPenalty = '';
         if (totalMinutes === 0) {
             finalPenalty = 'Снятие обвинений';
         } else if (isDeathPenalty) {
             finalPenalty = 'Высшая мера наказания';
-        } else if (isLifeSentence || totalMinutes >= 75) {
+        } else if (isLifeSentence || totalMinutes >= 70) {
             finalPenalty = 'Пожизненное заключение';
             if (xx5Count >= 2) {
                 finalPenalty = 'Высшая мера наказания';
             }
-        } else if (totalMinutes <= 5 && totalMinutes > 0) {
+        } else if (cappedMinutes <= 5 && cappedMinutes > 0) {
             setPendingVerdict({
                 totalMinutes,
                 finalOffenses,
@@ -472,7 +481,7 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
             setIsConfirmModalOpen(true);
             return;
         } else {
-            finalPenalty = `${totalMinutes} минут тюремного заключения`;
+            finalPenalty = `${cappedMinutes} минут тюремного заключения`;
         }
 
         let disciplinaryPenalty = '';
@@ -480,16 +489,8 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
             disciplinaryPenalty = 'Не предусмотрено';
         } else if (finalPenalty === 'Высшая мера наказания' || finalPenalty === 'Пожизненное заключение') {
             disciplinaryPenalty = 'Увольнение';
-        } else if (totalMinutes <= 5) {
-            disciplinaryPenalty = 'Не предусмотрено';
-        } else if (totalMinutes <= 10) {
-            disciplinaryPenalty = disciplinaryPenalties['XX2'];
-        } else if (totalMinutes <= 15) {
-            disciplinaryPenalty = disciplinaryPenalties['XX3'];
-        } else if (totalMinutes <= 25) {
-            disciplinaryPenalty = disciplinaryPenalties['XX4'];
         } else {
-            disciplinaryPenalty = 'Увольнение';
+            disciplinaryPenalty = disciplinaryPenalties[maxSeverity] || 'Не предусмотрено';
         }
 
         const position = settings.position.toLowerCase();
@@ -559,6 +560,7 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
             isLifeSentence,
             isDeathPenalty,
             xx5Count,
+            maxSeverity,
         } = pendingVerdict;
 
         let finalPenalty = '';
@@ -570,7 +572,7 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
         } else if (isDeathPenalty) {
             finalPenalty = 'Высшая мера наказания';
             disciplinaryPenalty = 'Увольнение';
-        } else if (isLifeSentence || totalMinutes >= 75) {
+        } else if (isLifeSentence || totalMinutes >= 70) {
             finalPenalty = 'Пожизненное заключение';
             if (xx5Count >= 2) {
                 finalPenalty = 'Высшая мера наказания';
@@ -578,18 +580,11 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
             disciplinaryPenalty = 'Увольнение';
         } else if (totalMinutes <= 5 && totalMinutes > 0) {
             finalPenalty = replace ? 'Предупреждение' : `${totalMinutes} минут тюремного заключения`;
-            disciplinaryPenalty = replace ? 'Не предусмотрено' : 'Не предусмотрено';
+            disciplinaryPenalty = replace ? 'Не предусмотрено' : (disciplinaryPenalties[maxSeverity] || 'Не предусмотрено');
         } else {
-            finalPenalty = `${totalMinutes} минут тюремного заключения`;
-            if (totalMinutes <= 10) {
-                disciplinaryPenalty = disciplinaryPenalties['XX2'];
-            } else if (totalMinutes <= 15) {
-                disciplinaryPenalty = disciplinaryPenalties['XX3'];
-            } else if (totalMinutes <= 25) {
-                disciplinaryPenalty = disciplinaryPenalties['XX4'];
-            } else {
-                disciplinaryPenalty = 'Увольнение';
-            }
+            const cappedMinutes = Math.min(totalMinutes, 30);
+            finalPenalty = `${cappedMinutes} минут тюремного заключения`;
+            disciplinaryPenalty = disciplinaryPenalties[maxSeverity] || 'Не предусмотрено';
         }
 
         setIsConfirmModalOpen(false);
@@ -653,7 +648,11 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
             isLifeSentence,
             isDeathPenalty,
             xx5Count,
+            maxSeverity,
         } = pendingVerdict;
+
+        const cappedMinutes = (!isLifeSentence && !isDeathPenalty && totalMinutes > 30 && totalMinutes < 70)
+            ? 30 : totalMinutes;
 
         let finalPenalty = '';
         let disciplinaryPenalty = '';
@@ -664,26 +663,18 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
         } else if (isDeathPenalty) {
             finalPenalty = 'Высшая мера наказания';
             disciplinaryPenalty = 'Увольнение';
-        } else if (isLifeSentence || totalMinutes >= 75) {
+        } else if (isLifeSentence || totalMinutes >= 70) {
             finalPenalty = 'Пожизненное заключение';
             if (xx5Count >= 2) {
                 finalPenalty = 'Высшая мера наказания';
             }
             disciplinaryPenalty = 'Увольнение';
-        } else if (totalMinutes <= 5 && totalMinutes > 0) {
+        } else if (cappedMinutes <= 5 && cappedMinutes > 0) {
             finalPenalty = 'Предупреждение';
             disciplinaryPenalty = 'Не предусмотрено';
         } else {
-            finalPenalty = `${totalMinutes} минут тюремного заключения`;
-            if (totalMinutes <= 10) {
-                disciplinaryPenalty = disciplinaryPenalties['XX2'];
-            } else if (totalMinutes <= 15) {
-                disciplinaryPenalty = disciplinaryPenalties['XX3'];
-            } else if (totalMinutes <= 25) {
-                disciplinaryPenalty = disciplinaryPenalties['XX4'];
-            } else {
-                disciplinaryPenalty = 'Увольнение';
-            }
+            finalPenalty = `${cappedMinutes} минут тюремного заключения`;
+            disciplinaryPenalty = disciplinaryPenalties[maxSeverity] || 'Не предусмотрено';
         }
 
         setIsWarningModalOpen(false);
