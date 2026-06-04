@@ -27,6 +27,7 @@ export interface Settings {
 export interface Timer {
     elapsedSeconds: number;
     running: boolean;
+    startedAt: number | null;
 }
 
 export interface ObjectDetails {

@@ -95,7 +95,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             newStartSeconds = 0;
         }
         setBaseStartSeconds(newStartSeconds);
-        setTimer({ elapsedSeconds: 0, running: true });
+        setTimer({ elapsedSeconds: 0, running: true, startedAt: Date.now() });
     };
 
     const handleSaveProfile = () => {
