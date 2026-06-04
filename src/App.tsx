@@ -685,6 +685,9 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
                 finalPenalty = 'Высшая мера наказания';
             }
             disciplinaryPenalty = 'Увольнение';
+        } else if (cappedMinutes <= 5 && cappedMinutes > 0) {
+            finalPenalty = 'Предупреждение';
+            disciplinaryPenalty = 'Не предусмотрено';
         } else {
             finalPenalty = `${cappedMinutes} минут тюремного заключения`;
             disciplinaryPenalty = disciplinaryPenalties[maxSeverity] || 'Не предусмотрено';
