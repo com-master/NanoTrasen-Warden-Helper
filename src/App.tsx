@@ -78,7 +78,11 @@ const App: React.FC = () => {
         xx5Count: number;
     } | null>(null);
     const [pendingHistoryEntry, setPendingHistoryEntry] = useState<VerdictHistoryEntry | null>(null);
-    const [showSeconds, setShowSeconds] = useState<boolean>(false);
+    const [showSeconds, setShowSeconds] = useState<boolean>(true);
+    const [pendingFinalResult, setPendingFinalResult] = useState<{
+        finalPenalty: string;
+        disciplinaryPenalty: string;
+    } | null>(null);
 
     const [verdictHistory, setVerdictHistory] = useState<VerdictHistoryEntry[]>(() => {
         const saved = localStorage.getItem('verdictHistory');
@@ -630,6 +634,7 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
         }
 
         if (!canProceed) {
+            setPendingFinalResult({ finalPenalty, disciplinaryPenalty });
             setWarningMessage(warningMessage);
             setIsWarningModalOpen(true);
             return;
@@ -642,9 +647,20 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
     const handleForceVerdict = () => {
         if (!pendingVerdict) return;
 
+        const { offenseDetails } = pendingVerdict;
+
+        // If we arrived here via handleConfirmReplace (user already chose warning vs imprisonment),
+        // use that pre-computed result directly instead of re-calculating.
+        if (pendingFinalResult) {
+            setIsWarningModalOpen(false);
+            finalizeVerdict(pendingFinalResult.finalPenalty, pendingFinalResult.disciplinaryPenalty, offenseDetails);
+            setPendingVerdict(null);
+            setPendingFinalResult(null);
+            return;
+        }
+
         const {
             totalMinutes,
-            offenseDetails,
             isLifeSentence,
             isDeathPenalty,
             xx5Count,
@@ -669,9 +685,6 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
                 finalPenalty = 'Высшая мера наказания';
             }
             disciplinaryPenalty = 'Увольнение';
-        } else if (cappedMinutes <= 5 && cappedMinutes > 0) {
-            finalPenalty = 'Предупреждение';
-            disciplinaryPenalty = 'Не предусмотрено';
         } else {
             finalPenalty = `${cappedMinutes} минут тюремного заключения`;
             disciplinaryPenalty = disciplinaryPenalties[maxSeverity] || 'Не предусмотрено';
