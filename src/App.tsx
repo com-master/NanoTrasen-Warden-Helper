@@ -341,6 +341,7 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
             const isDutyRelatedChapter = offense.chapter.startsWith('21X') || offense.chapter.startsWith('22X');
             const isExecutor = offenseWithMods.modifiers.includes('Исполнитель');
             const isOrganizer = offenseWithMods.modifiers.includes('Организатор');
+            let chargesDropped = false;
 
             if (offenseWithMods.modifiers.includes('Преступление, совершенное умышленно')) {
                 appliedModifiers.push('Преступление, совершенное умышленно (полное наказание)');
@@ -352,7 +353,7 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
                 }
             }
             if (offenseWithMods.modifiers.includes('Отсутствие вины')) {
-                minutes = 0;
+                chargesDropped = true;
                 appliedModifiers.push('Отсутствие вины (снятие обвинений)');
             }
 
@@ -366,7 +367,7 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
                 if (['XX3', 'XX4', 'XX5', 'XX6'].includes(offense.severity)) {
                     appliedModifiers.push('Приготовление к преступлению (полное наказание)');
                 } else {
-                    minutes = 0;
+                    chargesDropped = true;
                     appliedModifiers.push('Приготовление к преступлению (снятие обвинения)');
                 }
             }
@@ -375,7 +376,7 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
                 appliedModifiers.push('Безуспешный добровольный отказ от преступления (-5 минут)');
             }
             if (offenseWithMods.modifiers.includes('Успешный добровольный отказ от преступления')) {
-                minutes = 0;
+                chargesDropped = true;
                 appliedModifiers.push('Успешный добровольный отказ от преступления (снятие обвинений)');
             }
 
@@ -399,16 +400,16 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
 
             if (offenseWithMods.modifiers.includes('Гипноз')) {
                 if (!isHighSeverity) {
-                    minutes = 0;
+                    chargesDropped = true;
                     appliedModifiers.push('Гипноз (снятие обвинений)');
                 }
             }
             if (offenseWithMods.modifiers.includes('Крайняя необходимость')) {
-                minutes = 0;
+                chargesDropped = true;
                 appliedModifiers.push('Крайняя необходимость (снятие обвинений)');
             }
             if (offenseWithMods.modifiers.includes('Допустимая самооборона')) {
-                minutes = 0;
+                chargesDropped = true;
                 appliedModifiers.push('Допустимая самооборона (снятие обвинений)');
             }
             if (offenseWithMods.modifiers.includes('Манипулирование синтетиками')) {
@@ -433,8 +434,13 @@ ${offenseDetails.map((detail) => `[bullet/][bold]${detail}[/bold]`).join('\n')}
                 appliedModifiers.push('Явка с повинной (-5 минут)');
             }
 
-            if (offense.severity === 'XX5') isLifeSentence = true;
-            if (offense.severity === 'XX6') isDeathPenalty = true;
+            // chargesDropped wins over any additive modifiers applied earlier
+            if (chargesDropped) {
+                minutes = 0;
+            }
+
+            if (offense.severity === 'XX5' && minutes !== 0) isLifeSentence = true;
+            if (offense.severity === 'XX6' && minutes !== 0) isDeathPenalty = true;
 
             totalMinutes += minutes;
             offenseDetails.push(
